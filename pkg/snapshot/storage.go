@@ -540,7 +540,7 @@ func (o *snapshotter) prepareWritableOverlaybd(ctx context.Context, snID string)
 func (o *snapshotter) commitWritableOverlaybd(ctx context.Context, snID string) (retErr error) {
 	binpath := filepath.Join(o.config.OverlayBDUtilBinDir, "overlaybd-commit")
 	tmpPath := filepath.Join(o.root, "snapshots", snID, "block", ".commit-before-zfile")
-
+	log.G(ctx).Infof("commit overlaybd layer in snapshots/%s", snID)
 	out, err := exec.CommandContext(ctx, binpath,
 		o.overlaybdWritableDataPath(snID),
 		o.overlaybdWritableIndexPath(snID), tmpPath).CombinedOutput()

@@ -127,10 +127,10 @@ var convertCommand = cli.Command{
 		)
 
 		fsType := context.String("fstype")
-		fmt.Printf("filesystem type: %s\n", fsType)
+		log.G(ctx).Infof("filesystem type: %s", fsType)
 		dbstr := context.String("dbstr")
 		if dbstr != "" {
-			fmt.Printf("database config string: %s\n", dbstr)
+			log.G(ctx).Infof("database config string: %s", dbstr)
 		}
 
 		srcImg, err := ensureImageExist(ctx, cli, srcImage)
@@ -142,7 +142,6 @@ var convertCommand = cli.Command{
 		if err != nil {
 			return errors.Wrapf(err, "failed to read manifest")
 		}
-
 		resolver, err := commands.GetResolver(ctx, context)
 		if err != nil {
 			return err
@@ -318,6 +317,7 @@ func NewOverlaybdConvertor(ctx context.Context, cs content.Store, sn snapshots.S
 func (c *overlaybdConvertor) Convert(ctx context.Context, srcManifest ocispec.Manifest, fsType string) (ocispec.Descriptor, error) {
 	configData, err := content.ReadBlob(ctx, c.cs, srcManifest.Config)
 	if err != nil {
+		log.G(ctx).Errorf("ReadBlob failed: %v", err)
 		return emptyDesc, err
 	}
 
@@ -506,7 +506,7 @@ func (c *overlaybdConvertor) sentToRemote(ctx context.Context, desc ocispec.Desc
 	if err != nil {
 		log.G(ctx).Warnf("failed to insert to db, err: %v", err)
 		if strings.Contains(err.Error(), "Duplicate entry") {
-			fmt.Printf("Conflict when inserting into db, maybe other process is converting the same blob, please try again later\n")
+			log.G(ctx).Errorln("Conflict when inserting into db, maybe other process is converting the same blob, please try again later")
 		}
 		return err
 	}
@@ -589,7 +589,7 @@ func (c *overlaybdConvertor) convertLayers(ctx context.Context, srcDescs []ocisp
 
 		opts := []snapshots.Opt{
 			snapshots.WithLabels(map[string]string{
-				labelOverlayBDBlobWritable: "dir",
+				labelOverlayBDBlobWritable: "syncdir",
 				labelOverlayBDBlobFsType:   fsType,
 			}),
 		}

@@ -18,6 +18,7 @@ force:
 # build a binary from cmd
 bin/%: cmd/% force
 	@echo "$@"
+# @GOOS=linux go build -gcflags=all="-N -l"  -o $@ ./$<
 	@GOOS=linux go build -o $@ ./$<
 
 install: ## install binaries from bin

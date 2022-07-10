@@ -134,9 +134,10 @@ const (
 )
 
 const (
-	roDir = iota // overlayfs as rootfs. upper + lower (overlaybd)
-	rwDir        // mount overlaybd as rootfs
-	rwDev        // use overlaybd directly
+	roDir     = iota // overlayfs as rootfs. upper + lower (overlaybd)
+	rwDir            // mount overlaybd as rootfs
+	rwDev            // use overlaybd directly
+	rwSyncDir        // mount overlaybd with 'sync' option as rootfs
 )
 
 // SnapshotterConfig is used to configure the snapshotter instance
@@ -307,12 +308,16 @@ func (o *snapshotter) getWritableType(ctx context.Context, id string, info snaps
 	if !ok {
 		return
 	}
+	log.G(ctx).Debugf("%s: %s", LabelSupportReadWriteMode, m)
 	rwMode := func() int {
 		if m == "dir" {
 			return rwDir
 		}
 		if m == "dev" {
 			return rwDev
+		}
+		if m == "syncdir" {
+			return rwSyncDir
 		}
 		return roDir
 	}
@@ -374,7 +379,7 @@ func (o *snapshotter) createMountPoint(ctx context.Context, kind snapshots.Kind,
 			return nil, errors.Wrapf(err, "failed to get info of parent snapshot %s", parent)
 		}
 	}
-
+	log.G(ctx).Infof("labels: %v", info.Labels)
 	// If the layer is in overlaybd format, construct backstore spec and saved it into snapshot dir.
 	// Return ErrAlreadyExists to skip pulling and unpacking layer. See https://github.com/containerd/containerd/blob/master/docs/remote-snapshotter.md#snapshotter-apis-for-querying-remote-snapshots
 	// This part code is only for Pull.
@@ -489,7 +494,8 @@ func (o *snapshotter) createMountPoint(ctx context.Context, kind snapshots.Kind,
 			}
 
 			defer func() {
-				if retErr != nil && writeType == rwDir { // It's unnecessary to umount overlay block device if writeType == writeTypeRawDev
+				if retErr != nil && (writeType == rwDir || writeType == rwSyncDir) { // It's unnecessary to umount overlay block device if writeType == writeTypeRawDev
+					log.G(ctx).Errorf("umount error mount point: %s", o.overlaybdMountpoint(obdID))
 					if rerr := mount.Unmount(o.overlaybdMountpoint(obdID), 0); rerr != nil {
 						log.G(ctx).WithError(rerr).Warnf("failed to umount writable block %s", o.overlaybdMountpoint(obdID))
 					}
@@ -807,6 +813,19 @@ func (o *snapshotter) basedOnBlockDeviceMount(ctx context.Context, s storage.Sna
 				Type:   "bind",
 				Options: []string{
 					"rw",
+					"rbind",
+				},
+			},
+		}, nil
+	}
+	if writeType == rwSyncDir {
+		return []mount.Mount{
+			{
+				Source: o.overlaybdMountpoint(s.ID),
+				Type:   "bind",
+				Options: []string{
+					"rw",
+					"sync",
 					"rbind",
 				},
 			},
